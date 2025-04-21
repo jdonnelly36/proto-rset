@@ -1,0 +1,44 @@
+# See: https://wandb.ai/wandb_fc/articles/reports/Multi-GPU-Hyperparameter-Sweeps-in-Three-Simple-Steps--Vmlldzo1NDQ0MDEy
+
+description: |
+  Run a sweep for the vanilla model to validate the sweep works.
+  This has only two parameter settings, and an abbreviated training schedule.
+
+entity: protopnext
+project: test
+
+program: training/sweeps/sweep-vanilla.py
+
+method: grid
+
+metric:
+  goal: maximize
+  name: best_prototypes_embedded_accuracy
+
+parameters:
+  pre_project_phase_len:
+    values: [5]
+  post_project_phases:
+    values: [30]
+  
+  phase_multiplier:
+    values: [30]
+  lr_multiplier:
+    values: [1.0]
+  joint_lr_step_size:
+    values: [5]
+
+  latent_dim_exp:
+    values: [7] # 2^6 = 64, 2^9 = 512
+  num_prototypes_per_class:
+    values: [10]
+  
+  cluster_coef:
+    values: [-0.8]
+  separation_coef:
+    values: [0.08]
+  l1_coef:
+    values: [0.0001]
+
+  interpretable_metrics:
+    values: [True]

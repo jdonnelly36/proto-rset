@@ -1,0 +1,3 @@
+- experiment_name="second_round"
+- +experiment=natural_aggregation
+- debug.path_to_model="/usr/xtmp/zg78/protodbug/saved_models/cub200_clean_top20/firstExperiment__vgg16__cub200_clean_top20__e=15__we=5__λfix=0.0__+experiment=natural_base/14push0.6274.pth.tar"

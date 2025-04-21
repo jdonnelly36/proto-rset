@@ -1,0 +1,7 @@
+# This is the minimal black compatible flake8 config
+# https://github.com/psf/black/blob/main/docs/the_black_code_style/current_style.md
+[flake8]
+max-line-length = 88
+select = C,E,F,W,B,B950
+extend-ignore = E203, E501, W503
+exclude=test/*,**/site-packages/**,build/*,.venv/*,protopnet/Deformable-Convolution-V2-PyTorch/**,save_path_test/**,fake_test**

@@ -1,0 +1,73 @@
+# See: https://wandb.ai/wandb_fc/articles/reports/Multi-GPU-Hyperparameter-Sweeps-in-Three-Simple-Steps--Vmlldzo1NDQ0MDEy
+
+description: |
+  Run a sweep for the vanilla model to validate the sweep works.
+  This has only two parameter settings, and an abbreviated training schedule.
+
+entity: <WANDB_ENTITY>
+project: <WANDB_PROJECT>
+
+program: training/sweeps/sweep-vanilla-cos.py
+
+method: bayes
+
+metric:
+  goal: maximize
+  name: best_prototypes_embedded_accuracy
+
+parameters:
+  pre_project_phase_len:
+    distribution: int_uniform
+    min: 3
+    max: 15
+  post_project_phases:
+    values: [10]
+  
+  phase_multiplier:
+    values: [1]
+  lr_multiplier:
+    distribution: normal
+    mu: 1.0
+    sigma: .4
+  joint_lr_step_size:
+    distribution: int_uniform
+    min: 2
+    max: 10
+
+  num_addon_layers:
+    distribution: int_uniform
+    min: 0
+    max: 2
+  latent_dim_multiplier_exp:
+    distribution: int_uniform
+    min: -4
+    max: 1
+
+  num_prototypes_per_class:
+    distribution: int_uniform
+    min: 8
+    max: 16
+  
+  cluster_coef:
+    # 10th: -1.44 90th: -0.16
+    distribution: normal
+    mu: -0.8
+    sigma: 0.5
+  separation_coef:
+    # 10th: -0.05, 90th: 0.21
+    distribution: normal
+    mu: 0.08
+    sigma: 0.1
+
+  l1_coef:
+    distribution: log_uniform_values
+    min: 0.00001
+    max: 0.001
+
+  interpretable_metrics:
+    values: [False]
+
+  orthogonality_loss:
+    distribution: log_uniform_values
+    min: 0.00001
+    max: 0.001

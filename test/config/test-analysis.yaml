@@ -1,0 +1,20 @@
+---
+data_path: "unit_test_data"
+val_dir: "test_cropped/"
+train_push_dir: "train_cropped/"
+# gpuid: "0"
+modeldir: "test/out/e2e/saved_models/vgg19/train_cropped/004/"
+model: "3push0.3333.pth"
+imgdir: "test/datasets/cub200_cropped/"
+img: "016.Painted_Bunting/Painted_Bunting_0081_15230.jpg"
+imgclass: 15
+savedir: "test/out/e2e/saved_models/vgg19/train/003/"
+k: 2
+num_workers: 0
+check_test_accu: False
+not_class_specific: False
+img_size: 224
+
+custom_dataset_name: "RandomDataset"
+customDataSet_kw_args:
+  data_size: 3

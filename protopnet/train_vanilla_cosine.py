@@ -1,0 +1,424 @@
+import logging
+import random
+import warnings
+
+import numpy as np
+import torch
+
+import wandb
+
+from . import datasets
+from .activations import CosPrototypeActivation
+from .backbones import construct_backbone
+from .embedding import AddonLayers
+from .models.vanilla_protopnet import VanillaProtoPNet
+from .train.logging.weights_and_biases import WeightsAndBiasesTrainLogger
+from .train.metrics import InterpretableTrainingMetrics
+from .train.scheduling import TrainingSchedule
+from .train.trainer import ProtoPNetTrainer
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+log = logging.getLogger(__name__)
+
+
+def run(
+    *,
+    backbone="vgg16",
+    pre_project_phase_len=5,
+    phase_multiplier=1,  # for online augmentation
+    latent_dim_multiplier_exp=0,
+    joint_lr_step_size=5,
+    post_project_phases=10,
+    joint_epochs_per_phase=10,
+    last_only_epochs_per_phase=20,
+    cluster_coef=-0.8,
+    separation_coef=0.08,
+    l1_coef=0.0001,
+    num_addon_layers=2,
+    fa_type=None,
+    fa_coef=0.0,
+    num_prototypes_per_class=10,
+    joint_add_on_lr_multiplier=1,
+    warm_lr_multiplier=1,
+    lr_multiplier=1,
+    lr_step_gamma=0.1,
+    orthogonality_loss=0.01,
+    class_specific=False,
+    dry_run=False,
+    verify=False,
+    interpretable_metrics=False,
+    dataset="CUB200",
+    dataset_dir=None,
+    bias_rate=0.0,
+    classes_to_bias=100,
+    debug_round=False,
+    debug_forbid_coef=100,
+    debuf_remeber_coef=0,
+    debug_forbid_dir: str = "debug_folder/forbid",
+    debug_remember_dir: str = "debug_folder/remember",
+    resume=False,
+    resume_weight_path: str = '',
+    use_test_dataset: bool = False,
+    use_modified_set: bool = False
+):
+    """
+    Train a Vanilla ProtoPNet.
+
+    Args:
+    - backbone: str - See backbones.py
+    - pre_project_phase_len: int - number of epochs in each pre-project phase (warm-up, joint). Total preproject epochs is 2*pre_project_phase_len*phase_multiplier.
+    - phase_multiplier: int - for each phase, multiply the number of epochs in that phase by this number
+    - latent_dim_multiplier_exp: int - expotential of 2 for the latent dimension of the prototype layer
+    - joint_lr_step_size: int - number of epochs between each step in the joint learning rate scheduler. Multiplied by phase_multiplier.
+    - last_only_epochs_per_phase: int - coefficient for clustering loss
+    - post_project_phases: int - number of times to iterate between last-only, joint, project after the initial pre-project phases
+    - cluster_coef: float - coefficient for clustering loss term
+    - separation_coef: float - coefficient for separation loss term
+    - l1_coef: float - coefficient for clustering loss
+    - fa_type: str - one of "serial", "l2", or "square" to indicate which type of fine annotation loss to use. if None, fine annotation is deactivated.
+    - fa_coef: float - coefficient for fine annotation loss term
+    - num_prototypes_per_class: int - number of prototypes to create for each class
+    - lr_multiplier: float - multiplier for learning rates. The base values are from protopnet's training.
+    - class_specific: boolean - whether to bind prototypes to individual classes or allow them to be distributed unevenly based on training
+    - dry_run: bool - Configure the training run, but do not execute it
+    - preflight: bool - Configure a training run for a single epoch of all phases
+    - verify: bool - Configure a training run for a single epoch of all phases
+    - interpretable_metrics: bool - Whether to calculate interpretable metrics
+    """
+
+    # TODO: this should be controlled elsewhere
+    if wandb.run is None:
+        wandb.init(project="test")
+
+    if verify:
+        log.info("Setting preflight configuration to all 1s")
+        wandb.offline = True
+        pre_project_phase_len = 1
+        post_project_phases = 1
+        joint_epochs_per_phase = 1
+        last_only_epochs_per_phase = 1
+        phase_multiplier = 1
+        latent_dim_multiplier_exp = 0
+        num_prototypes_per_class = 16
+        num_addon_layers = 2
+
+    log.info("Running vanilla training as a %s", "dry_run" if dry_run else "full run")
+    log.info(f'debug_round = {debug_round}')
+    # Set Seeds
+    SEED = 1234
+    torch.manual_seed(SEED)
+    np.random.seed(SEED)
+    random.seed(SEED)
+
+    # TODO:
+    # - Update the dataloader/dataset to use real data (and change batch size, num classes accordingly)
+    # - Update the optimizer
+    # - Update the schedule
+    if fa_type is not None and fa_coef == 0:
+        warnings.warn("Run set up to use Fine Annotations, but fa_coef set to 0.")
+    elif fa_type is None and fa_coef != 0:
+        warnings.warn(
+            f"Run set up to not use Fine Annotations, but fa_coef set to {fa_coef}."
+        )
+
+    setup = {
+        "num_prototypes_per_class": num_prototypes_per_class,
+        "coefs": {
+            "cluster": cluster_coef,
+            "separation": separation_coef,
+            "orthogonality_loss": orthogonality_loss,
+            "l1": l1_coef,
+            "cross_entropy": 1,
+            "fa": fa_coef
+        },
+        "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+    }
+
+    if debug_round:
+        setup["coefs"]["debug_remember"] = debuf_remeber_coef
+        setup["coefs"]["debug_forbid"] = debug_forbid_coef
+
+    if "dense" in backbone:
+        num_accumulation_batches = 5
+        batch_sizes = {"train": 95 // 5, "project": 75 // 5, "val": 100 // 5}
+    elif "convnext" in backbone:
+        num_accumulation_batches = 2
+        batch_sizes = {"train": 95 // 2, "project": 75 // 2, "val": 100 // 2}
+    else:
+        num_accumulation_batches = 1
+        batch_sizes = {"train": 95, "project": 75, "val": 100}
+
+    log.debug("initializing datasets")
+    if "HAM" in dataset:
+        split_dataloaders = datasets.training_dataloaders(
+            dataset,
+            batch_sizes=batch_sizes,
+            debug=debug_round,
+            debug_forbid_dir=debug_forbid_dir,
+            debug_remember_dir=debug_remember_dir
+        )
+    elif bias_rate <= 0.0:
+        if debug_round:
+            split_dataloaders = datasets.training_dataloaders(
+                dataset, 
+                data_path=dataset_dir,
+                batch_sizes=batch_sizes,
+                debug=debug_round,
+                debug_forbid_dir=debug_forbid_dir,
+                debug_remember_dir=debug_remember_dir,
+                val_dir="test" if use_test_dataset else "validation"
+            )
+        else:
+            split_dataloaders = datasets.training_dataloaders(
+                dataset,
+                data_path=dataset_dir,
+                batch_sizes=batch_sizes,
+                val_dir="test" if use_test_dataset else "validation"
+            )
+    else:
+        if "10CLASS" in dataset:
+            num_classes = 10
+        elif "CUB" in dataset or "cub" in dataset:
+            log.info(f"Doing biased cub with bias rate {bias_rate}")
+            num_classes = 200
+        else:
+            # TODO: Make this less hacky - this just meant
+            # to throw an error and satisfy the linter
+            assert (
+                False
+            ), "Error: Only CUB supports the biasing mechanism right now"
+            num_classes = None
+
+        assert classes_to_bias <= num_classes
+
+        # Generate equally spaced values from 0 to 1
+        color_indices = np.linspace(0, 1, classes_to_bias)
+
+        # Get colors from the HSV colormap
+        colors = plt.cm.hsv(color_indices)
+
+        # Drop alpha
+        colors = torch.tensor(colors[:, :-1])
+
+        split_dataloaders = datasets.training_dataloaders(
+            dataset,
+            batch_sizes=batch_sizes,
+            color_patch_params={
+                "class_to_color": {i: colors[i] for i in range(classes_to_bias)},
+                "patch_probability": bias_rate,
+                "patch_size": (1/5, 1/5),
+            },
+            debug=debug_round,
+            debug_forbid_dir=debug_forbid_dir,
+            debug_remember_dir=debug_remember_dir
+        )
+    log.debug("datasets initialized")
+    log.info(batch_sizes)
+
+    num_warm_epochs = pre_project_phase_len * phase_multiplier
+    # accounting for warm and joint
+    total_pre_project = 2 * (pre_project_phase_len) * phase_multiplier
+
+    true_last_only_epochs_per_phase = last_only_epochs_per_phase * phase_multiplier
+    num_post_project_backprop_epochs = (
+        post_project_phases
+        * (joint_epochs_per_phase + last_only_epochs_per_phase)
+        * phase_multiplier
+    )
+    num_joint_epochs = joint_epochs_per_phase * post_project_phases * phase_multiplier
+    # NOTE: the last-only epochs are added by the training schedule, so this schedule is just the joint between projects
+    joint_between_project = joint_epochs_per_phase * phase_multiplier
+    project_epochs = [
+        e
+        for e in range(
+            total_pre_project,
+            num_post_project_backprop_epochs + total_pre_project - 1,
+            joint_between_project,
+        )
+    ]
+
+    schedule = TrainingSchedule(
+        num_warm_epochs=num_warm_epochs,
+        num_last_only_epochs=0,
+        num_warm_pre_offset_epochs=0,
+        max_epochs=num_post_project_backprop_epochs + total_pre_project,
+        num_joint_epochs=num_joint_epochs,
+        last_layer_fixed=False,
+        project_epochs=project_epochs,
+        num_last_only_epochs_after_each_project=true_last_only_epochs_per_phase,
+    )
+
+    activation_function = CosPrototypeActivation()
+
+    backbone = construct_backbone(backbone, input_channels=(3, *split_dataloaders.image_size))
+
+    add_on_layers = AddonLayers(
+        num_prototypes=setup["num_prototypes_per_class"]
+        * split_dataloaders.num_classes,
+        input_channels=backbone.latent_dimension[0],
+        proto_channel_multiplier=2**latent_dim_multiplier_exp,
+        num_addon_layers=num_addon_layers,
+    )
+
+    vppn = VanillaProtoPNet(
+        backbone=backbone,
+        add_on_layers=add_on_layers,
+        activation=activation_function,
+        num_classes=split_dataloaders.num_classes,
+        num_prototypes_per_class=setup["num_prototypes_per_class"],
+    )
+
+    if resume:
+        vppn = torch.load(resume_weight_path)
+
+    vppn = vppn.to(setup["device"])
+
+    warm_optimizer_lrs = {
+        "add_on_layers": 0.003 * lr_multiplier * warm_lr_multiplier,
+        "prototype_tensors": 0.003 * lr_multiplier * warm_lr_multiplier,
+    }
+
+    joint_optimizer_lrs = {
+        "prototype_tensors": 0.003 * lr_multiplier * joint_add_on_lr_multiplier,
+        "features": 0.0001 * lr_multiplier,
+        "add_on_layers": 0.003 * lr_multiplier * joint_add_on_lr_multiplier,
+    }
+
+    warm_optimizer_specs = [
+        {
+            "params": vppn.add_on_layers.parameters(),
+            "lr": warm_optimizer_lrs["add_on_layers"],
+            "weight_decay": 1e-3,
+        },
+        {
+            "params": vppn.prototype_layer.parameters(),
+            "lr": warm_optimizer_lrs["prototype_tensors"],
+        },
+    ]
+
+    joint_optimizer_specs = [
+        {
+            "params": vppn.add_on_layers.parameters(),
+            "lr": joint_optimizer_lrs["add_on_layers"],
+            "weight_decay": 1e-3,
+        },
+        {
+            "params": vppn.backbone.parameters(),
+            "lr": joint_optimizer_lrs["features"],
+            "weight_decay": 1e-3,
+        },  # bias are now also being regularized
+        {
+            "params": vppn.prototype_layer.parameters(),
+            "lr": joint_optimizer_lrs["prototype_tensors"],
+        },
+    ]
+
+    last_layer_optimizer_specs = [
+        {
+            "params": vppn.prototype_prediction_head.class_connection_layer.parameters(),
+            "lr": 1e-4 * lr_multiplier,
+        }
+    ]
+
+    warm_optimizer = torch.optim.Adam(warm_optimizer_specs)
+    joint_optimizer = torch.optim.Adam(joint_optimizer_specs)
+    last_layer_optimizer = torch.optim.Adam(last_layer_optimizer_specs)
+
+    # TODO: Make this step for each epoch
+    # joint_lr_scheduler = torch.optim.lr_scheduler.StepLR(
+    #     joint_optimizer, step_size=joint_lr_step_size, gamma=0.2
+    # )
+
+    optimizers_with_schedulers = {
+        "warm": (warm_optimizer, None),  # No scheduler for warm-up phase
+        "joint": (
+            joint_optimizer,
+            torch.optim.lr_scheduler.StepLR(
+                joint_optimizer,
+                step_size=joint_lr_step_size * phase_multiplier,
+                gamma=lr_step_gamma,
+            ),
+        ),
+        # Add the joint LR scheduler
+        "last_only": (
+            last_layer_optimizer,
+            None,
+        ),
+    }
+
+    project_patience = 2
+
+    if interpretable_metrics:
+        training_metrics = InterpretableTrainingMetrics(
+            num_classes=split_dataloaders.num_classes,
+            proto_per_class=setup["num_prototypes_per_class"],
+            # FIXME: these shouldn't be hardcoded
+            # instead, the train_dataloaders should return an object
+            part_num=15,
+            img_size=224,
+            half_size=36,
+            protopnet=vppn,
+            device=setup["device"],
+        )
+        metric_args = {
+            "training_metrics": training_metrics,
+            "target_metric_name": "acc_proto_score",
+            "min_post_project_target_metric": 0.0,
+            "min_save_threshold": 0.10,
+        }
+        train_logger = WeightsAndBiasesTrainLogger(
+            device=setup["device"], calculate_best_for=training_metrics.metric_names()
+        )
+    else:
+        training_metrics = InterpretableTrainingMetrics(
+            num_classes=split_dataloaders.num_classes,
+            proto_per_class=setup["num_prototypes_per_class"],
+            # FIXME: these shouldn't be hardcoded
+            # instead, the train_dataloaders should return an object
+            part_num=15,
+            img_size=224,
+            half_size=36,
+            protopnet=vppn,
+            device=setup["device"],
+            acc_only=True,
+        )
+        metric_args = {
+            "training_metrics": training_metrics,
+            "target_metric_name": "accuracy",
+            "min_post_project_target_metric": 0.0,
+            "min_save_threshold": 0.3,
+        }
+        train_logger = WeightsAndBiasesTrainLogger(
+            device=setup["device"], calculate_best_for=training_metrics.metric_names()
+        )
+
+    ppn_trainer = ProtoPNetTrainer(
+        model=vppn,
+        split_loaders=split_dataloaders,
+        activation_function=activation_function,
+        optimizers_with_schedulers=optimizers_with_schedulers,
+        device=setup["device"],
+        coefs=setup["coefs"],
+        class_specific=class_specific,
+        with_fa=fa_type is not None,
+        fa_type=fa_type,
+        logger=train_logger,
+        early_stopping_patience=project_patience,
+        num_accumulation_batches=num_accumulation_batches,
+        balance_ce=False,
+        debug_round=debug_round,
+        **metric_args,
+    )
+
+    # TODO:
+    # Should the schedule be passed to the trainer?
+    # Could then have the optimier passed into the schedule
+
+    if dry_run:
+        log.info("Skipping training due to dry run: %s", schedule)
+    else:
+        ppn_trainer.train(schedule)
+
+    return vppn

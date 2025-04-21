@@ -1,0 +1,26 @@
+# See: https://wandb.ai/wandb_fc/articles/reports/Multi-GPU-Hyperparameter-Sweeps-in-Three-Simple-Steps--Vmlldzo1NDQ0MDEy
+
+description: Demo sweep file
+
+program: training/demo/wandb-test.py
+
+entity: protopnext
+project: test
+
+method: grid
+
+metric:
+  goal: minimize
+  name: val_loss
+
+parameters:
+  audc:
+    values: [0.1, 0.2, 0.3, 0.4, 0.5]
+  class_connection:
+    values: [0.1, 0.2, 0.3]
+  stability:
+    values: [0.3]
+  auc:
+    values: [0.5]
+  semantic_similarity:
+    values: [0.1]

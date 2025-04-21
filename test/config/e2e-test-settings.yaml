@@ -1,0 +1,76 @@
+---
+val_batch_size: 100
+base_architecture: vgg19
+data_path: "unit_test_data"
+img_size: 224
+train_batch_size: 80
+experiment_run: '004'
+warm_optimizer_lrs:
+  prototype_tensors: 0.003
+  add_on_layers: 0.003
+num_workers: 0
+prefetch_factor: 0
+prototype_shape:
+- 128
+- 1
+- 1
+i: 30
+warm_pre_prototype_optimizer_lrs:
+  conv_offset: 0.003
+  add_on_layers: 0.003
+  features: 0.0001
+num_warm_epochs: 2
+joint_optimizer_lrs:
+  joint_last_layer_lr: 1.0e-05
+  prototype_tensors: 0.003
+  conv_offset: 0.0001
+  features: 0.0001
+  add_on_layers: 0.003
+prototype_activation_function: "log"
+push_start: 3
+last_layer_fixed: true
+warm_pre_offset_optimizer_lrs:
+  prototype_tensors: 0.003
+  add_on_layers: 0.003
+  features: 0.0001
+train_push_dir: "train_cropped/"
+joint_lr_step_size: 5
+add_on_layers_type: "regular"
+num_classes: 5
+push_epochs:
+- 1
+- 2
+- 3
+- 4
+num_train_epochs: 4
+train_dir: "train_cropped/"
+train_push_batch_size: 75
+num_secondary_warm_epochs: 2
+val_dir: "test_cropped/"
+last_layer_optimizer_lr: 0.0001
+coefs:
+  clst: -0.8
+  offset_weight_l2: 0.8
+  sep: 0.08
+  orthogonality_loss: 0.1
+  offset_bias_l2: 0.8
+  l1: 0.01
+  crs_ent: 1
+  fa: 0.0001
+with_fa: true
+fa_type: "square"
+gpuid: "0"
+last_layer_fixed: true
+using_deform: false
+topk_k: 1
+num_prototypes: 5
+dilation: 2
+incorrect_class_connection: -0.5
+rand_seed: 1
+save_path: "test/out/e2e/"
+no_cuda: true
+no_subtractive_margin: true
+
+custom_dataset_name: "RandomDataset"
+customDataSet_kw_args:
+  data_size: 3

@@ -1,0 +1,49 @@
+# See: https://wandb.ai/wandb_fc/articles/reports/Multi-GPU-Hyperparameter-Sweeps-in-Three-Simple-Steps--Vmlldzo1NDQ0MDEy
+
+description: |
+  Test memory capacity by running a sweep the vanilla model with a single parameter setting, high memory demand, and short schedule.
+
+entity: <WANDB_ENTITY>
+project: test
+
+program: training/sweeps/sweep-vanilla.py
+
+method: grid
+
+metric:
+  goal: maximize
+  name: best_prototypes_embedded_accuracy
+
+parameters:
+  pre_project_phase_len:
+    values: [1]
+  post_project_phases:
+    values: [2]
+  joint_epochs_per_phase:
+    values: [1]
+  last_only_epochs_per_phase:
+    values: [1]
+  
+  phase_multiplier:
+    values: [1]
+  lr_multiplier:
+    values: [1]
+  joint_lr_step_size:
+    values: [1]
+
+  num_addon_layers:
+    values: [2]
+  latent_dim_multiplier_exp:
+    values: [1] # embedding_dim
+  num_prototypes_per_class:
+    values: [16]
+  
+  cluster_coef:
+    values: [-0.8]
+  separation_coef:
+    values: [0.08]
+  l1_coef:
+    values: [0.0001]
+
+  interpretable_metrics:
+    values: [False]

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Main Interface</title>
+    <link rel="stylesheet" type="text/css" href="../static/styles.css"">
+    <script>
+        const BASE_URL = "{{ base_url }}";
+        
+        async function submitInteger() {
+            document.body.classList.add('loading'); // Set loading cursor
+            document.getElementById("generateImageButton").disabled = true;
+            document.getElementById("removalButton").disabled = true;
+            const integerInput = document.getElementById("integerInput").value;
+
+            const imageType = document.getElementById("imageType").value;
+            const param1 = document.getElementById("param1").value;
+            const param2 = document.getElementById("param2").value;
+
+            const response = await fetch(`${BASE_URL}/process_integer`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ integer: integerInput, image_type: imageType, param1: param1, param2: param2 }),
+            });
+            // const result = await response.json();
+            if (response.headers.get("content-type").includes("application/json")) {
+                const result = await response.json();
+                if (result.success_message) {
+                    alert(result.success_message); // Display alert message if no image
+                    window.location.replace("https://app.prolific.com/submissions/complete?cc=C12TG5WF");
+                } else if (result.message) {
+                    alert(result.message); // Display alert message if no image
+                }
+                document.body.classList.remove('loading'); // Reset cursor
+            } else {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                document.getElementById("imageViewer").src = url;
+                alert("Prototype(s) successfully removed; updating image viewer accordingly.")
+                document.body.classList.remove('loading'); // Reset cursor
+            }
+            document.getElementById("generateImageButton").disabled = false;
+            document.getElementById("removalButton").disabled = false;
+            // alert(result.message);
+        }
+
+        function updateParameterFields() {
+            const imageType = document.getElementById("imageType").value;
+            if (imageType === "Global Analysis") {
+                document.getElementById("param1").placeholder = "Target prototype idx";
+                document.getElementById("param1Label").innerText = "Target prototype idx";
+            } else if (imageType === "Local Analysis") {
+                document.getElementById("param1").placeholder = "Image idx to visualize";
+                document.getElementById("param1Label").innerText = "Image idx to visualize";
+            } else {
+                document.getElementById("param1").placeholder = "Min prototype idx";
+                document.getElementById("param1Label").innerText = "Min prototype idx";
+            }
+            document.getElementById("param1Div").style.display = imageType === "Global Analysis" || imageType === "Local Analysis" || imageType === "Prototype Grid" ? "block" : "none";
+            document.getElementById("param2Div").style.display = imageType === "Prototype Grid" ? "block" : "none";
+        }
+
+        async function stopEarly() {
+            const response = await fetch(`${BASE_URL}/stop_early`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ image_type: imageType, param1: param1, param2: param2 }),
+            });
+            if (response.headers.get("content-type").includes("application/json")) {
+                const result = await response.json();
+                if (result.success_message) {
+                    document.getElementById("completionText").innerText = "You have identified all biased prototypes. You may click this button to complete your participation!"
+                    alert(result.success_message); // Display alert message if no image
+                    window.location.replace("https://app.prolific.com/submissions/complete?cc=C12TG5WF");
+                } else {
+                    alert(result.message); // Display alert message if no image
+                }
+            } else {
+            }
+        }
+
+        async function generateImage() {
+            document.body.classList.add('loading'); // Set loading cursor
+            document.getElementById("generateImageButton").disabled = true;
+            document.getElementById("removalButton").disabled = true;
+            const imageType = document.getElementById("imageType").value;
+            const param1 = document.getElementById("param1").value;
+            const param2 = document.getElementById("param2").value;
+
+            const response = await fetch(`${BASE_URL}/generate_image`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ image_type: imageType, param1: param1, param2: param2 }),
+            });
+
+            if (response.headers.get("content-type").includes("application/json")) {
+                const result = await response.json();
+                if (result.message) {
+                    alert(result.message); // Display alert message if no image
+                }
+            } else {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                document.getElementById("imageViewer").src = url;
+            }
+            document.getElementById("generateImageButton").disabled = false;
+            document.getElementById("removalButton").disabled = false;
+            document.body.classList.remove('loading'); // Reset cursor
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7fa;
+            color: #333;
+            /* display: flex; */
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Container styling */
+        .container {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            max-width: 100vw;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Heading */
+        h1 {
+            font-size: 1.8em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        /* Input and button styling */
+        label {
+            font-size: 1em;
+            color: #2c3e50;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        input[type="number"],
+        input[type="text"],
+        select {
+            width: 20%;
+            padding: 10px;
+            margin: 10px 0 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+
+        button {
+            background-color: #3498db;
+            color: #fff;
+            border: none;
+            width: 20%;
+            border-radius: 4px;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        button:disabled,
+        button[disabled]{
+            background-color: #b8c4cc;
+            color: #000000;
+            border: none;
+            width: 20%;
+            border-radius: 4px;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+
+        /* Image viewer styling */
+        #imageViewerContainer {
+            margin-top: 20px;
+            /* display: flex; */
+            justify-content: center;
+            align-items: center;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            width: 100vw;  /* Set to the target width of the resized images */
+        }
+
+        #imageViewer {
+            width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        #stopButton {
+            background-color: #db343c;
+        }
+
+        /* Loading cursor */
+        .loading {
+            cursor: wait;
+        }
+        
+        .parameter-selection {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 10vh;
+            gap: 10px; /* Space between elements */
+            flex-wrap: wrap; /* Ensures fields wrap to the next line on smaller screens */
+        }
+
+        .parameter-selection label {
+            font-size: 0.9em;
+            color: #2c3e50;
+        }
+
+        .parameter-selection input[type="number"],
+        .parameter-selection input[type="text"],
+        .parameter-selection select {
+            padding: 8px;
+            font-size: 1em;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: auto; /* Prevents the input fields from taking full width */
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img width="80%" src="https://users.cs.duke.edu/~jcd97/removal_examples_fixed_2.png" alt="Examples of prototypes to remove" />
+    </div>
+    <div class="container">
+        
+        <!-- Integer Submission -->
+        <div>
+            <h3>Adjust the Model</h3>
+
+            <label for="integerInput">Use the box below to tell us which prototype(s) you'd like to remove. You can input a number (e.g., 18) or a list of numbers (e.g., 1, 2, 4, 10).</label>
+            idx: <input type="text" id="integerInput">
+            <button id="removalButton" onclick="submitInteger()">Remove Specified Prototype(s)</button>
+        </div>
+
+        <!-- Image Viewer Section -->
+        <div>
+            <h3>Analyze the Model</h3>
+            <label for="imageType">
+                Use the tools below to examine the model; the drop down menu lets you select an analysis type to display. 
+                <br/>
+                We recommend starting with "Prototype Grid," and using it to check prototypes one group of ~50 at a time (e.g., 0-50, 50-100, etc.).
+                <br/>
+                Use these analyses to identify prototypes with confounding patches.
+            </label>
+            <span class="parameter-selection">
+                <select id="imageType" onchange="updateParameterFields()">
+                    <option value="Prototype Grid">Prototype Grid</option>
+                    <option value="Global Analysis">Global Analysis</option>
+                    <option value="Local Analysis">Local Analysis</option>
+                </select>
+
+                <span id="param1Div" style="display:block;">
+                    <label for="param1" id="param1Label">Min prototype index:</label>
+                    <input type="number" id="param1" placeholder="Min prototype idx" value=0>
+                </span>
+
+                <span id="param2Div" style="display:block;">
+                    <label for="param2" id="param2Label">Max prototype index:</label>
+                    <input type="number" id="param2" placeholder="Max prototype idx" value=50>
+                </span>
+                <button id="generateImageButton" onclick="generateImage()">Generate Image</button>
+            </span>
+
+        </div>
+    </div>
+    <div class="container">
+        <p id="completionText">You have not identified all biased prototypes. You may stop early by entering the following code on prolific and exiting the website, but you will not be eligible for the bonus payment of $10: C12TG5WF</p>
+        <!-- <button class="stopButton" onclick="stopEarly()">Stop Early</button> -->
+        <br/>
+        <!-- <br/> -->
+        <p>There are 1509 prototypes in total (much fewer need to be removed). You must remove at least 3 color patch prototypes to be eligible for payment.</p>
+    </div>
+    <div id="imageViewerContainer">
+        <img id="imageViewer" alt="Use the controls above to generate an image" width="800" height="400">
+    </div>
+</body>
+</html>

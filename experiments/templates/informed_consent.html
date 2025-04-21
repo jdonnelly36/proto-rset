@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Instructions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .container {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            max-width: 80vw;
+            width: 50%;
+            height: 100vh;
+            text-align: center;
+        }
+
+        button {
+            background-color: #3498db;
+            color: #fff;
+            border: none;
+            width: 20%;
+            border-radius: 4px;
+            padding: 10px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Informed Consent</h1>
+        <h3>Key Information:</h1>
+        <p> 
+        This research study is being conducted by Jon Donnelly, Hayden McTavish, and Stark Guo, doctoral student researchers; 
+        Dr. Alina Jade Barnett, a postdoctoral researcher; and their advisor, Dr. Cynthia Rudin, a faculty researcher; 
+        all at Duke University in Durham, NC. This research examines whether a novel tool can be used to remove obvious errors in an AI model. 
+        You will be asked to use the tool to remove obvious errors, a task that will take approximately 30 minutes and no longer than an hour. 
+        Your participation in this research study is voluntary. 
+        <br/>
+        <br/>
+        You may withdraw at any time, but you will only be paid if you remove at least 10% of color-patch prototypes and do not remove more than 2 non-color-patch prototypes. 
+        After completing the survey, you will be paid at a rate of $15/hour of work through the Prolific platform.
+        <br/>
+        <br/>
+        
+        In accordance with Prolific policies, we may reject your work if the task was not completed correctly, or the instructions were not followed. 
+        A bonus payment of $10 will be offered if all errors are identified and corrected within 30 minutes. 
+        <br/>
+        <br/>
+        
+        There are no anticipated risks or benefits to participants for participating in this study. 
+        Your participation is anonymous as we will not collect any information that the researchers could identify you with.
+        <br/>
+        <br/>
+        
+        If you have any questions about this study, please contact Jon Donnelly at jon.donnelly@duke.edu and include the term “Prolific Participant Question” in your email subject line. For questions about your rights as a participant contact the Duke Campus Institutional Review Board at campusirb@duke.edu referencing protocol #2025-0185.
+        <br/>
+        <br/>
+        
+        If you consent to participate in this study please click the “>>” below to begin the survey.
+        
+        </p>
+        <button onclick="window.location.href='{{ base_url }}/instructions'">>></button>
+    </div>
+</body>
+</html>
