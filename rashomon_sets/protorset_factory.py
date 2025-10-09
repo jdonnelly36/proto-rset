@@ -270,6 +270,7 @@ class ProtoRSetFactory:
         Returns:
             combined_dataset: pd.DataFrame -- The described dataset
         """
+        self.initial_protopnet.eval()
         with torch.no_grad():
             all_similarities = torch.empty(0).to(self.device)
             all_targets = torch.empty(0)
