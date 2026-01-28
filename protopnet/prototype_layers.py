@@ -152,7 +152,7 @@ class PrototypeLayer(nn.Module):
         # Assuming data is on correct device; setup belongs in the trainer
         # TODO: ALL ON CUDA OR NOT
         proto_act_torch = self.forward(
-            protoL_input_torch.to(self.prototype_tensors.device)
+            protoL_input_torch
         )["prototype_activations"]
 
         # protoL_input_ = torch.clone(protoL_input_torch.detach().cpu())
@@ -170,6 +170,7 @@ class PrototypeLayer(nn.Module):
 
         prototype_shape = self.prototype_tensors.shape
 
+        all_hashes = [hash_func(protoL_input_torch[i]) for i in range(protoL_input_torch.shape[0])]
         for j in range(self.num_prototypes):
             class_index = j
 
@@ -232,7 +233,7 @@ class PrototypeLayer(nn.Module):
                 if sample_ids is not None:
                     self.prototype_info_dict[j] = prototype_meta(
                         sample_ids[img_index_in_batch].numpy().tobytes(),
-                        hash_func(protoL_input_torch[img_index_in_batch]),
+                        all_hashes[img_index_in_batch],
                     )
 
                 global_max_proto_act[j] = batch_max_proto_act_j
