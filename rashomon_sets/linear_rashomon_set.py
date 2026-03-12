@@ -224,30 +224,30 @@ class MultiClassLogisticRSet:
         # Train the model
         start = time.time()
         old_loss = None
+
+        # Move inputs and labels to the device once
+        inputs = self.X_input
+        labels = self.Y_input
+
         for epoch in tqdm(range(self.max_iter), desc="Running SGD to find optimal model"):
-            for i, (inputs, labels) in enumerate(train_loader):
-                # Move inputs and labels to the device
-                inputs = inputs.to(self.device)
-                labels = labels.to(self.device)
+            # Forward pass
+            outputs = model(inputs)
+            all_params = model.linear_weights
+            if self.reg == "l1":
+                loss = criterion(outputs, labels) + self.lam * torch.norm(
+                    all_params, p=1
+                )
+            elif self.reg == "l2":
+                loss = criterion(outputs, labels) + self.lam * torch.norm(
+                    all_params, p=2
+                )
+            else:
+                loss = criterion(outputs, labels)
 
-                # Forward pass
-                outputs = model(inputs)
-                all_params = model.linear_weights
-                if self.reg == "l1":
-                    loss = criterion(outputs, labels) + self.lam * torch.norm(
-                        all_params, p=1
-                    )
-                elif self.reg == "l2":
-                    loss = criterion(outputs, labels) + self.lam * torch.norm(
-                        all_params, p=2
-                    )
-                else:
-                    loss = criterion(outputs, labels)
-
-                # Backward and optimize
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+            # Backward and optimize
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
             # Print training loss for each epoch
             if (epoch + 1) % 10 == 0 and self.verbose:

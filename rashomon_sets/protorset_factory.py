@@ -84,7 +84,7 @@ class ProtoRSetFactory:
 
         # ===== Load and store class assignments for the original model
         self.initial_protopnet_path = initial_protopnet_path
-        self.initial_protopnet = torch.load(self.initial_protopnet_path, weights_only=False)
+        self.initial_protopnet = torch.load(self.initial_protopnet_path, weights_only=False).to(device)
 
         self.device = device
         rashomon_set_args["device"] = device
@@ -149,7 +149,6 @@ class ProtoRSetFactory:
 
         # ===== History storing all user interactions
         self.user_interaction_history = []
-        pass
 
         self.device = device
         # ===== Cuncurrent run analysis
@@ -274,7 +273,7 @@ class ProtoRSetFactory:
         with torch.no_grad():
             all_similarities = torch.empty(0).to(self.device)
             all_targets = torch.empty(0)
-            for item in tqdm(dataloader, desc=f"Computing prototype activation table{ f'for {split} split' if split is not None else ''}"):
+            for item in tqdm(dataloader, desc=f"Computing prototype activation table{ f' for {split} split' if split is not None else ''}"):
                 img = item["img"].to(self.device)
                 targets = item["target"]
 

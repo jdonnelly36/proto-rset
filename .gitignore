@@ -1,7 +1,6 @@
 
 # Python Output
 
-models
 runs/
 test/runs
 test/wandb

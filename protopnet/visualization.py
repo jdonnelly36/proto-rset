@@ -1026,7 +1026,7 @@ def reproject_prototypes(model, output_path, project_dataloader):
     # push old model to get proto hashes (kind of hacky)
     # FIXME: check that this didn't change results somehow
     with torch.no_grad():
-        model.project(project_dataloader)
+        model.project(project_dataloader, class_specific=True)
     # log.info("description of protos without vis: ", model.describe_prototypes())
     log.info("Project complete, saving model to %s", reprojected_model_save_loc)
 
